@@ -147,7 +147,7 @@ with tab_data:
                        f"Layer: {r['Layer']}<br>"
                        f"Ni: {r['Ni']:.2f}")
             ).add_to(m)
-        st_folium(m, height=650, use_container_width=True)
+       st_folium(m, height=650, use_container_width=True, returned_objects=[])
 
     st.markdown("### 📋 Tabel Data")
     show_original = st.checkbox("Tampilkan data asli (hanya mengunduh data komposit!)", value=False)
