@@ -44,7 +44,7 @@ selected_files = st.sidebar.selectbox(
 selected_uploaded_files = [f for f in uploaded_files if f.name in selected_files]
 
 if not selected_uploaded_files:
-    st.warning("Silakan pilih minimal satu file.")
+    st.warning("Silakan pilih satu file.")
     st.stop()
 
 @st.cache_data
