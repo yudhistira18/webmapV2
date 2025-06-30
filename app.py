@@ -195,8 +195,7 @@ with tab1:
     )
     fig_tern.update_layout(height=500)
     st.plotly_chart(fig_tern, use_container_width=True)
-
-# === TAB 2: Boxplot ===
+# === TAB 2: Ternary ===
 with tab2:
     st.markdown("### 📦 Boxplot MC per Layer")
     fig_box = go.Figure()
@@ -205,19 +204,13 @@ with tab2:
         if not df_layer.empty and 'MC' in df_layer:
             fig_box.add_trace(go.Box(
                 y=df_layer['MC'],
-                x=df_layer['BHID'],  # 🆕 Menambahkan BHID di sumbu x agar muncul saat hover
                 name=f"{code} - {label}",
                 marker_color=color_map.get(code, 'gray'),
                 boxpoints='all', jitter=0.4, pointpos=0,
                 marker=dict(opacity=0.6, size=4), line=dict(width=1),
                 hovertext=df_layer['BHID']
             ))
-    fig_box.update_layout(
-        yaxis_title="MC (%)",
-        xaxis_title="BHID",
-        height=500,
-        showlegend=False
-    )
+    fig_box.update_layout(yaxis_title="MC (%)", height=500)
     st.plotly_chart(fig_box, use_container_width=True)
 
     st.markdown("### ⚖️ Boxplot Densitas")
@@ -229,18 +222,12 @@ with tab2:
                 if not df_dens.empty:
                     fig_dens.add_trace(go.Box(
                         y=df_dens[dens_col],
-                        x=df_dens['BHID'],  # 🆕 BHID di hover
                         name=f"{layer_names.get(code, code)} ({label})",
                         marker_color=color_map.get(code, 'gray'),
                         boxpoints='all', jitter=0.4, pointpos=0,
-                        hovertext=df_dens['BHID']
+                        hovertext=df_layer['BHID']
                     ))
-    fig_dens.update_layout(
-        yaxis_title="Densitas (gr/cm³)",
-        xaxis_title="BHID",
-        height=500,
-        showlegend=False
-    )
+    fig_dens.update_layout(yaxis_title="Densitas (gr/cm³)", height=500)
     st.plotly_chart(fig_dens, use_container_width=True)
 
 # === TAB 3: Scatter ===
