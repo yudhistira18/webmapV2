@@ -28,10 +28,27 @@ st.markdown("""
 
 # ============ FILE UPLOAD MULTI ============
 st.sidebar.markdown("### \U0001F4BE Riwayat Upload")
-uploaded_files = st.sidebar.file_uploader("\U0001F4C4 Upload beberapa file Excel (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+uploaded_files = st.sidebar.file_uploader(
+    "\U0001F4C4 Upload beberapa file Excel (.xlsx)",
+    type=["xlsx"],
+    accept_multiple_files=True
+)
 
 if not uploaded_files:
     st.info("Silakan upload satu atau lebih file Excel yang berisi kolom: Prospect, Bukit, BHID, Layer, From, To, XCollar, YCollar, ZCollar, dan unsur.")
+    st.stop()
+
+# Pilih file mana yang ingin digabungkan
+file_names = [f.name for f in uploaded_files]
+selected_files = st.sidebar.multiselect(
+    "✅ Pilih file untuk diproses sebagai satu data:",
+    options=file_names,
+    default=file_names
+)
+selected_uploaded_files = [f for f in uploaded_files if f.name in selected_files]
+
+if not selected_uploaded_files:
+    st.warning("Silakan pilih minimal satu file untuk diproses.")
     st.stop()
 
 @st.cache_data
@@ -45,7 +62,8 @@ def load_multiple_files(file_objs):
     df_all = df_all.drop_duplicates(subset=["BHID", "XCollar", "YCollar", "ZCollar", "Layer", "From", "To"])
     return df_all
 
-raw_df = load_multiple_files(uploaded_files)
+raw_df = load_multiple_files(selected_uploaded_files)
+
 
 # ============ CLEANING & PREPARATION ============
 unsur = ['Ni','Co','Fe2O3','Fe','FeO','SiO2','CaO','MgO','MnO','Cr2O3','Al2O3','P2O5','TiO2','SO3','LOI','MC']
