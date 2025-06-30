@@ -7,7 +7,6 @@ from streamlit_folium import st_folium
 from io import BytesIO
 import plotly.express as px
 import plotly.graph_objects as go
-import threading
 import warnings
 import os
 import tempfile
@@ -27,44 +26,40 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ============ FILE UPLOAD ============
+# ============ FILE UPLOAD MULTI ============
 st.sidebar.markdown("### \U0001F4BE Riwayat Upload")
-if 'uploaded_files' not in st.session_state:
-    st.session_state.uploaded_files = {}
+uploaded_files = st.sidebar.file_uploader("\U0001F4C4 Upload beberapa file Excel (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
-uploaded_file = st.file_uploader("\U0001F4C4 Upload file Excel (.xlsx) (JANGAN ADA CONDITIONAL FORMATTING)", type=["xlsx"])
-if not uploaded_file:
-    st.info("Silakan upload file Excel yang berisi kolom: Prospect, Bukit, BHID, Layer, From, To, XCollar, YCollar, ZCollar, dan unsur.")
-if uploaded_file:
-    unique_id = str(uuid.uuid4())[:8]
-    temp_path = os.path.join(tempfile.gettempdir(), f"{unique_id}.xlsx")
-    with open(temp_path, "wb") as f:
-        f.write(uploaded_file.getvalue())
-    st.session_state.uploaded_files[uploaded_file.name] = temp_path
-
-if not st.session_state.uploaded_files:
+if not uploaded_files:
+    st.info("Silakan upload satu atau lebih file Excel yang berisi kolom: Prospect, Bukit, BHID, Layer, From, To, XCollar, YCollar, ZCollar, dan unsur.")
     st.stop()
 
-selected_filename = st.sidebar.selectbox("Pilih file yang ingin dianalisis:", list(st.session_state.uploaded_files.keys()))
-selected_filepath = st.session_state.uploaded_files[selected_filename]
-
-# ============ CACHING FUNCTIONS ============
 @st.cache_data
-def load_and_prepare_data(filepath):
-    df_raw = pd.read_excel(filepath)
-    unsur = ['Ni','Co','Fe2O3','Fe','FeO','SiO2','CaO','MgO','MnO','Cr2O3','Al2O3','P2O5','TiO2','SO3','LOI','MC']
-    extra_cols = [col for col in ['Dens_WetMeas', 'Dens_WetArch'] if col in df_raw.columns]
+def load_multiple_files(file_objs):
+    dfs = []
+    for uploaded_file in file_objs:
+        df = pd.read_excel(uploaded_file)
+        df["Source_File"] = uploaded_file.name
+        dfs.append(df)
+    df_all = pd.concat(dfs, ignore_index=True)
+    df_all = df_all.drop_duplicates(subset=["BHID", "XCollar", "YCollar", "ZCollar", "Layer", "From", "To"])
+    return df_all
 
-    if 'Thickness' not in df_raw.columns:
-        df_raw['Thickness'] = df_raw['To'] - df_raw['From']
+raw_df = load_multiple_files(uploaded_files)
 
-    required = ['Prospect','Bukit','BHID','Layer','From','To','Thickness','XCollar','YCollar','ZCollar'] + unsur + extra_cols
-    for col in required:
-        if col not in df_raw.columns:
-            df_raw[col] = np.nan
+# ============ CLEANING & PREPARATION ============
+unsur = ['Ni','Co','Fe2O3','Fe','FeO','SiO2','CaO','MgO','MnO','Cr2O3','Al2O3','P2O5','TiO2','SO3','LOI','MC']
+extra_cols = [col for col in ['Dens_WetMeas', 'Dens_WetArch'] if col in raw_df.columns]
 
-    df_clean = df_raw[required].dropna(subset=['Prospect','Bukit','BHID','Layer','Thickness','XCollar','YCollar'])
-    return df_clean, unsur, extra_cols
+if 'Thickness' not in raw_df.columns:
+    raw_df['Thickness'] = raw_df['To'] - raw_df['From']
+
+required = ['Prospect','Bukit','BHID','Layer','From','To','Thickness','XCollar','YCollar','ZCollar'] + unsur + extra_cols
+for col in required:
+    if col not in raw_df.columns:
+        raw_df[col] = np.nan
+
+df_clean = raw_df[required].dropna(subset=['Prospect','Bukit','BHID','Layer','Thickness','XCollar','YCollar'])
 
 @st.cache_data
 def compute_composite(df_clean, unsur):
@@ -101,14 +96,11 @@ def transform_coordinates(composite):
     composite['Latitude'] = lat
     return composite
 
-# ============ DATA PROCESSING ============
 with st.spinner("\u23F3 Menghitung komposit dan koordinat..."):
-    df_clean, unsur, extra_cols = load_and_prepare_data(selected_filepath)
     composite = transform_coordinates(compute_composite(df_clean, unsur))
 
-# ============ FILTERS ============
+# ============ FILTER ============
 st.sidebar.header("\U0001F50D Filter Data")
-
 filter_base = df_clean.copy()
 prospect_opts = sorted(filter_base['Prospect'].unique())
 selected_prospect = st.sidebar.selectbox("\U0001F3F7️ Prospect", ["All"] + prospect_opts)
@@ -132,7 +124,7 @@ filtered_composite = composite[
     composite['Layer'].astype(str).isin(filter_base['Layer'].astype(str))
 ]
 
-# ============ PLOTTING ============
+# ============ PETA & TABEL ============
 st.markdown("## \U0001F4CA Ringkasan")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Prospect", filtered_composite['Prospect'].nunique())
@@ -152,91 +144,124 @@ if not filtered_composite.empty:
     with st.container():
         st_folium(m, height=500, use_container_width=True, returned_objects=[])
 
-# ============ VISUALIZATION TAB ============
-st.markdown("## \U0001F4C8 Visualisasi")
+# ============ TABEL DATA ============
+st.markdown("## \U0001F4CB Tabel Data")
+show_original = st.checkbox("Tampilkan data asli (hanya mengunduh data komposit!)", value=False)
+composite_cols = ['Prospect','Bukit','BHID','Layer','From','To','Layer Thickness','Total_Depth'] + unsur
+original_cols = [col for col in composite_cols if col in df_clean.columns]
 
-layer_map = {
-    100: 'Top Soil',
-    200: 'Limonit',
-    250: 'Limonit Organik',
-    300: 'Saprolit',
-    400: 'Bedrock'
-}
-color_map = {
-    100: 'gray',
-    200: 'red',
-    250: 'black',
-    300: 'green',
-    400: 'blue'
-}
+if show_original:
+    st.dataframe(filter_base[original_cols], use_container_width=True)
+else:
+    st.dataframe(filtered_composite[composite_cols], use_container_width=True)
 
-with st.expander("\U0001F52C Scatter Plot (MgO vs Fe dan MgO vs SiO₂)"):
-    scatter_data = filter_base.dropna(subset=['MgO', 'Fe', 'SiO2', 'Layer']).copy()
-    scatter_data['Layer_Label'] = scatter_data['Layer'].map(layer_map)
+st.markdown("### \U0001F4CA Koordinat Collar dan Total Depth")
+summary = filtered_composite[['Prospect','Bukit','BHID','XCollar','YCollar','ZCollar','Total_Depth']].drop_duplicates()
+st.dataframe(summary, use_container_width=True)
 
-    fig_scatter1 = px.scatter(
-        scatter_data, x='MgO', y='Fe', color='Layer_Label',
-        labels={'color': 'Layer'}, title='MgO vs Fe'
-    )
-    st.plotly_chart(fig_scatter1, use_container_width=True)
+# ============ VISUALISASI ============
+st.markdown("## 📈 Visualisasi")
+tab1, tab2 = st.tabs(["🔺 Ternary & Boxplot", "📊 Scatter MgO"])
 
-    fig_scatter2 = px.scatter(
-        scatter_data, x='MgO', y='SiO2', color='Layer_Label',
-        labels={'color': 'Layer'}, title='MgO vs SiO₂'
-    )
-    st.plotly_chart(fig_scatter2, use_container_width=True)
-
-with st.expander("\u26AA Ternary Plot (SiO₂ - MgO - FeO)"):
+with tab1:
+    st.markdown("### 🔺 Ternary Plot (SiO₂ - MgO - FeO)")
     ternary_data = filter_base.dropna(subset=['SiO2', 'MgO', 'FeO', 'Layer']).copy()
-    ternary_data['Layer_Label'] = ternary_data['Layer'].map(layer_map)
+    ternary_data['Layer'] = ternary_data['Layer'].astype(int)
+    layer_names = {
+        100: 'Top Soil',
+        200: 'Limonit',
+        250: 'Limonit Organik',
+        300: 'Saprolit',
+        400: 'Bedrock'
+    }
+    color_map = {
+        100: 'gray',
+        200: 'red',
+        250: 'black',
+        300: 'green',
+        400: 'blue'
+    }
+    ternary_data['Layer_Label'] = ternary_data['Layer'].map(layer_names)
 
     fig_tern = px.scatter_ternary(
-        ternary_data, a='SiO2', b='MgO', c='FeO',
+        ternary_data,
+        a='SiO2', b='MgO', c='FeO',
         color='Layer_Label',
-        color_discrete_map={name: color_map[code] for code, name in layer_map.items()},
-        hover_name='BHID',
-        size_max=8
+        color_discrete_map={name: color_map[code] for code, name in layer_names.items() if code in color_map},
+        hover_name='BHID'
     )
     fig_tern.update_layout(height=500, margin=dict(t=40, b=40, l=20, r=20))
     st.plotly_chart(fig_tern, use_container_width=True)
 
-with st.expander("\U0001F4A1 Box Plot Densitas"):
+    st.markdown("### 📦 Boxplot MC per Layer")
+    fig_box = go.Figure()
+    for code, label in layer_names.items():
+        df_layer = filter_base[filter_base['Layer'] == code]
+        if not df_layer.empty and 'MC' in df_layer:
+            fig_box.add_trace(go.Box(
+                y=df_layer['MC'],
+                name=f"{code} - {label}",
+                marker_color=color_map.get(code, 'gray'),
+                boxpoints='all',
+                jitter=0.4,
+                pointpos=0,
+                marker=dict(opacity=0.6, size=4),
+                line=dict(width=1)
+            ))
+    fig_box.update_layout(
+        yaxis_title="MC (%)",
+        xaxis_title="Layer",
+        height=500,
+        showlegend=False
+    )
+    st.plotly_chart(fig_box, use_container_width=True)
+
+    st.markdown("### ⚖️ Boxplot Densitas")
     fig_dens = go.Figure()
-    densitas_types = {
-        'Dens_WetMeas': 'Meas',
-        'Dens_WetArch': 'Arch'
-    }
-    for dens_col, label in densitas_types.items():
-        if dens_col not in filter_base.columns:
-            continue
-        for layer_code in [200, 300]:
-            layer_data = filter_base[
-                (filter_base['Layer'] == layer_code) &
-                (filter_base[dens_col].notna())
-            ]
-            if not layer_data.empty:
-                fig_dens.add_trace(go.Box(
-                    y=layer_data[dens_col],
-                    name=f"{layer_map[layer_code]} ({label})",
-                    marker_color=color_map[layer_code],
-                    boxpoints='all',
-                    jitter=0.4,
-                    pointpos=0,
-                    marker=dict(opacity=0.6, size=4),
-                    line=dict(width=1)
-                ))
+    for dens_col, label in {'Dens_WetMeas': 'Meas', 'Dens_WetArch': 'Arch'}.items():
+        if dens_col in filter_base.columns:
+            for code in [200, 300]:
+                df_dens = filter_base[(filter_base['Layer'] == code) & filter_base[dens_col].notna()]
+                if not df_dens.empty:
+                    fig_dens.add_trace(go.Box(
+                        y=df_dens[dens_col],
+                        name=f"{layer_names.get(code, code)} ({label})",
+                        marker_color=color_map.get(code, 'gray'),
+                        boxpoints='all',
+                        jitter=0.4,
+                        pointpos=0
+                    ))
     fig_dens.update_layout(
         yaxis_title="Densitas (gr/cm³)",
-        xaxis_title="Layer & Jenis Densitas",
         height=500,
-        showlegend=False,
-        margin=dict(t=40, b=40, l=20, r=20)
+        showlegend=False
     )
     st.plotly_chart(fig_dens, use_container_width=True)
+
+with tab2:
+    st.markdown("### 🔬 Scatter Plot MgO vs Fe")
+    fig1 = px.scatter(
+        filter_base.dropna(subset=['MgO','Fe']),
+        x='MgO', y='Fe', color=filter_base['Layer'].map(layer_names),
+        labels={'color': 'Layer'}, title='MgO vs Fe'
+    )
+    fig1.update_layout(height=450)
+    st.plotly_chart(fig1, use_container_width=True)
+
+    st.markdown("### 🔬 Scatter Plot MgO vs SiO₂")
+    fig2 = px.scatter(
+        filter_base.dropna(subset=['MgO','SiO2']),
+        x='MgO', y='SiO2', color=filter_base['Layer'].map(layer_names),
+        labels={'color': 'Layer'}, title='MgO vs SiO₂'
+    )
+    fig2.update_layout(height=450)
+    st.plotly_chart(fig2, use_container_width=True)
+
 
 # ============ EXPORT ============
 st.markdown("### \U0001F4E5 Download")
 out = BytesIO()
 with pd.ExcelWriter(out, engine='openpyxl') as writer:
     filtered_composite.to_excel(writer, index=False, sheet_name="Composite")
+    summary.to_excel(writer, index=False, sheet_name="Summary")
 st.download_button("\u2B07\uFE0F Unduh Hasil", data=out.getvalue(), file_name="composite_filtered.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
