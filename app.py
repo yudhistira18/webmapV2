@@ -39,7 +39,7 @@ file_names = [f.name for f in uploaded_files]
 selected_files = st.sidebar.selectbox(
     "✅ Pilih file untuk ditampilkan:",
     options=file_names,
-    default=file_names
+    index=0
 )
 selected_uploaded_files = [f for f in uploaded_files if f.name in selected_files]
 
