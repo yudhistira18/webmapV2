@@ -174,8 +174,9 @@ st.dataframe(summary, use_container_width=True)
 
 # ============ VISUALISASI ============
 st.markdown("## 📈 Visualisasi")
-tab1, tab2 = st.tabs(["🔺 Ternary & Boxplot", "📊 Scatter MgO"])
+tab1, tab2, tab3 = st.tabs(["🔺 Ternary", "📦 Boxplot", "📊 Scatter MgO"])
 
+# === TAB 1: Ternary ===
 with tab1:
     st.markdown("### 🔺 Ternary Plot (SiO₂ - MgO - FeO)")
     ternary_data = filtered.dropna(subset=['SiO2', 'MgO', 'FeO', 'Layer']).copy()
@@ -195,6 +196,8 @@ with tab1:
     fig_tern.update_layout(height=500)
     st.plotly_chart(fig_tern, use_container_width=True)
 
+# === TAB 2: Boxplot ===
+with tab2:
     st.markdown("### 📦 Boxplot MC per Layer")
     fig_box = go.Figure()
     for code, label in layer_names.items():
@@ -226,7 +229,8 @@ with tab1:
     fig_dens.update_layout(yaxis_title="Densitas (gr/cm³)", height=500)
     st.plotly_chart(fig_dens, use_container_width=True)
 
-with tab2:
+# === TAB 3: Scatter ===
+with tab3:
     st.markdown("### 🔬 Scatter MgO vs Fe")
     fig1 = px.scatter(
         filtered.dropna(subset=['MgO','Fe']),
