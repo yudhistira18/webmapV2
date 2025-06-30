@@ -205,12 +205,19 @@ with tab2:
         if not df_layer.empty and 'MC' in df_layer:
             fig_box.add_trace(go.Box(
                 y=df_layer['MC'],
+                x=df_layer['BHID'],  # 🆕 Menambahkan BHID di sumbu x agar muncul saat hover
                 name=f"{code} - {label}",
                 marker_color=color_map.get(code, 'gray'),
                 boxpoints='all', jitter=0.4, pointpos=0,
-                marker=dict(opacity=0.6, size=4), line=dict(width=1)
+                marker=dict(opacity=0.6, size=4), line=dict(width=1),
+                hovertext=df_layer['BHID']
             ))
-    fig_box.update_layout(yaxis_title="MC (%)", height=500)
+    fig_box.update_layout(
+        yaxis_title="MC (%)",
+        xaxis_title="BHID",
+        height=500,
+        showlegend=False
+    )
     st.plotly_chart(fig_box, use_container_width=True)
 
     st.markdown("### ⚖️ Boxplot Densitas")
@@ -222,31 +229,48 @@ with tab2:
                 if not df_dens.empty:
                     fig_dens.add_trace(go.Box(
                         y=df_dens[dens_col],
+                        x=df_dens['BHID'],  # 🆕 BHID di hover
                         name=f"{layer_names.get(code, code)} ({label})",
                         marker_color=color_map.get(code, 'gray'),
-                        boxpoints='all', jitter=0.4, pointpos=0
+                        boxpoints='all', jitter=0.4, pointpos=0,
+                        hovertext=df_dens['BHID']
                     ))
-    fig_dens.update_layout(yaxis_title="Densitas (gr/cm³)", height=500)
+    fig_dens.update_layout(
+        yaxis_title="Densitas (gr/cm³)",
+        xaxis_title="BHID",
+        height=500,
+        showlegend=False
+    )
     st.plotly_chart(fig_dens, use_container_width=True)
 
 # === TAB 3: Scatter ===
 with tab3:
     st.markdown("### 🔬 Scatter MgO vs Fe")
+    df_scatter = filtered.dropna(subset=['MgO','Fe']).copy()
+    df_scatter['Layer_Label'] = df_scatter['Layer'].map(layer_names)
     fig1 = px.scatter(
-        filtered.dropna(subset=['MgO','Fe']),
+        df_scatter,
         x='MgO', y='Fe',
-        color=filtered['Layer'].map(layer_names),
-        labels={'color': 'Layer'}, title='MgO vs Fe'
+        color='Layer_Label',
+        hover_name='BHID',
+        color_discrete_map={v: color_map[k] for k, v in layer_names.items()},
+        title='MgO vs Fe'
     )
+    fig1.update_layout(height=450)
     st.plotly_chart(fig1, use_container_width=True)
 
     st.markdown("### 🔬 Scatter MgO vs SiO₂")
+    df_scatter2 = filtered.dropna(subset=['MgO','SiO2']).copy()
+    df_scatter2['Layer_Label'] = df_scatter2['Layer'].map(layer_names)
     fig2 = px.scatter(
-        filtered.dropna(subset=['MgO','SiO2']),
+        df_scatter2,
         x='MgO', y='SiO2',
-        color=filtered['Layer'].map(layer_names),
-        labels={'color': 'Layer'}, title='MgO vs SiO₂'
+        color='Layer_Label',
+        hover_name='BHID',
+        color_discrete_map={v: color_map[k] for k, v in layer_names.items()},
+        title='MgO vs SiO₂'
     )
+    fig2.update_layout(height=450)
     st.plotly_chart(fig2, use_container_width=True)
 
 # ============ DOWNLOAD ============
